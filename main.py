@@ -2,11 +2,15 @@ import streamlit as st
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
 import torch.nn.functional as F
-import plotly.express as px
 import pandas as pd
+from langdetect import detect, DetectorFactory
+import plotly.express as px
+
+# Đảm bảo langdetect cho kết quả ổn định
+DetectorFactory.seed = 0
 
 # ==============================
-# ⚙️ Load model & tokenizer
+# ⚙️ Tải model & tokenizer
 # ==============================
 @st.cache_resource
 def load_model_and_tokenizer(model_name="tabularisai/multilingual-sentiment-analysis"):
@@ -17,63 +21,74 @@ def load_model_and_tokenizer(model_name="tabularisai/multilingual-sentiment-anal
 tokenizer, model = load_model_and_tokenizer()
 
 # ==============================
-# 🗺️ Sentiment labels
+# 🏷️ Bản đồ nhãn cảm xúc (Tiếng Việt)
 # ==============================
 sentiment_map = {
-    0: "Very Negative",
-    1: "Negative",
-    2: "Neutral",
-    3: "Positive",
-    4: "Very Positive"
+    0: "Rất tiêu cực",
+    1: "Tiêu cực",
+    2: "Trung lập",
+    3: "Tích cực",
+    4: "Rất tích cực"
 }
 
 # ==============================
-# 🎨 Giao diện Streamlit
+# 🎨 Cấu hình giao diện Streamlit
 # ==============================
-st.set_page_config(page_title="Sentiment Analysis", page_icon="💬", layout="centered")
+st.set_page_config(page_title="Phân tích cảm xúc đa ngôn ngữ", page_icon="💬", layout="centered")
 
 st.markdown(
     """
     <style>
-    .title {
-        text-align: center;
-        color: #2E86C1;
-        font-size: 2.2em;
-        font-weight: bold;
-        margin-bottom: 10px;
-    }
-    .sub {
-        text-align: center;
-        color: #666;
-        font-size: 1.1em;
-        margin-bottom: 25px;
-    }
-    .result {
-        background-color: #F0F3F4;
-        padding: 15px;
-        border-radius: 10px;
-        font-size: 1.1em;
-        margin-top: 10px;
-    }
+    .title { text-align:center; color:#2E86C1; font-size:2.2em; font-weight:bold; margin-bottom:10px; }
+    .sub { text-align:center; color:#666; font-size:1.1em; margin-bottom:25px; }
+    .result { background-color:#F0F3F4; padding:15px; border-radius:10px; font-size:1.1em; margin-top:10px; }
     </style>
     """,
     unsafe_allow_html=True
 )
 
-st.markdown('<div class="title">💬 Sentiment Analysis App</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub">Dựa trên mô hình <b>tabularisai/multilingual-sentiment-analysis</b></div>', unsafe_allow_html=True)
+st.markdown('<div class="title">💬 Ứng dụng phân tích cảm xúc đa ngôn ngữ</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub">Sử dụng mô hình <b>tabularisai/multilingual-sentiment-analysis</b></div>', unsafe_allow_html=True)
 
 # ==============================
-# ✏️ Nhập văn bản
+# ✏️ Ô nhập văn bản
 # ==============================
-user_input = st.text_area("Nhập câu (đa ngôn ngữ):", "", height=120, placeholder="Ví dụ: Sản phẩm này thật tuyệt vời!")
+user_input = st.text_area("Nhập câu cần phân tích (hỗ trợ đa ngôn ngữ):", "", height=120, placeholder="Ví dụ: Tôi rất thích sản phẩm này!")
 
 if st.button("🔍 Phân tích cảm xúc", use_container_width=True):
     text = user_input.strip()
     if not text:
         st.warning("⚠️ Vui lòng nhập văn bản trước khi phân tích.")
     else:
-        # Tokenize & inference
+        # ==============================
+        # 🌍 Nhận diện ngôn ngữ
+        # ==============================
+        try:
+            lang_code = detect(text)
+        except:
+            lang_code = "Không xác định"
+
+        # Gán tên ngôn ngữ (một số phổ biến)
+        lang_map = {
+            "vi": "Tiếng Việt",
+            "en": "Tiếng Anh",
+            "fr": "Tiếng Pháp",
+            "de": "Tiếng Đức",
+            "es": "Tiếng Tây Ban Nha",
+            "zh-cn": "Tiếng Trung (Giản thể)",
+            "zh-tw": "Tiếng Trung (Phồn thể)",
+            "ja": "Tiếng Nhật",
+            "ko": "Tiếng Hàn",
+            "id": "Tiếng Indonesia",
+            "th": "Tiếng Thái"
+        }
+        lang_name = lang_map.get(lang_code, f"Mã ngôn ngữ: {lang_code}")
+
+        st.info(f"🌐 **Ngôn ngữ phát hiện:** {lang_name}")
+
+        # ==============================
+        # 🔮 Phân tích cảm xúc
+        # ==============================
         inputs = tokenizer(
             text,
             return_tensors="pt",
@@ -92,35 +107,33 @@ if st.button("🔍 Phân tích cảm xúc", use_container_width=True):
         pred_score = probs[pred_id].item()
 
         # ==============================
-        # 💡 Hiển thị kết quả chính
+        # 💡 Hiển thị kết quả dự đoán
         # ==============================
         st.markdown(f'<div class="result"><b>Kết quả dự đoán:</b> {pred_label}<br>'
-                    f'<b>Độ tin cậy:</b> {pred_score:.2%}</div>', unsafe_allow_html=True)
+                    f'<b>Mức độ tin cậy:</b> {pred_score:.2%}</div>', unsafe_allow_html=True)
 
-        # Thanh tiến trình biểu diễn confidence
         st.progress(float(pred_score))
 
         # ==============================
-        # 📊 Biểu đồ xác suất
+        # 📊 Biểu đồ tròn hiển thị xác suất
         # ==============================
         df = pd.DataFrame({
-            "Sentiment": [sentiment_map[i] for i in range(len(probs))],
-            "Confidence": [float(p) for p in probs]
+            "Cảm xúc": [sentiment_map[i] for i in range(len(probs))],
+            "Xác suất": [float(p) for p in probs]
         })
-        fig = px.bar(
+
+        fig = px.pie(
             df,
-            x="Sentiment",
-            y="Confidence",
-            text=[f"{p:.2%}" for p in probs],
-            color="Sentiment",
-            color_discrete_sequence=px.colors.sequential.Blues_r
+            values="Xác suất",
+            names="Cảm xúc",
+            color="Cảm xúc",
+            color_discrete_sequence=px.colors.sequential.Blues_r,
+            title="Biểu đồ thể hiện mức độ tin cậy của từng nhãn"
         )
-        fig.update_traces(textposition="outside")
-        fig.update_layout(
-            yaxis_range=[0, 1],
-            title="Mức độ tin cậy của từng nhãn",
-            title_x=0.5,
-            showlegend=False,
-            height=400
+        fig.update_traces(
+            textinfo="label+percent",
+            pull=[0.08 if i == pred_id else 0 for i in range(len(df))],
+            textfont_size=14
         )
+        fig.update_layout(title_x=0.5, height=450)
         st.plotly_chart(fig, use_container_width=True)
