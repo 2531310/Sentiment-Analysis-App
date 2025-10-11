@@ -3,11 +3,8 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
 import torch.nn.functional as F
 import pandas as pd
-from langdetect import detect, DetectorFactory
+import langid
 import plotly.express as px
-
-# Đảm bảo langdetect cho kết quả ổn định
-DetectorFactory.seed = 0
 
 # ==============================
 # ⚙️ Tải model & tokenizer
@@ -53,38 +50,40 @@ st.markdown('<div class="sub">Sử dụng mô hình <b>tabularisai/multilingual-
 # ==============================
 # ✏️ Ô nhập văn bản
 # ==============================
-user_input = st.text_area("Nhập câu cần phân tích (hỗ trợ đa ngôn ngữ):", "", height=120, placeholder="Ví dụ: Tôi rất thích sản phẩm này!")
+user_input = st.text_area(
+    "Nhập câu cần phân tích (hỗ trợ đa ngôn ngữ):",
+    "",
+    height=120,
+    placeholder="Ví dụ: Tôi rất thích sản phẩm này hoặc I love this product!"
+)
 
+# ==============================
+# 🔍 Phân tích khi người dùng bấm nút
+# ==============================
 if st.button("🔍 Phân tích cảm xúc", use_container_width=True):
     text = user_input.strip()
     if not text:
         st.warning("⚠️ Vui lòng nhập văn bản trước khi phân tích.")
     else:
         # ==============================
-        # 🌍 Nhận diện ngôn ngữ
+        # 🌍 Phát hiện ngôn ngữ với langid
         # ==============================
-        try:
-            lang_code = detect(text)
-        except:
-            lang_code = "Không xác định"
+        lang_code, confidence = langid.classify(text)
 
-        # Gán tên ngôn ngữ (một số phổ biến)
         lang_map = {
             "vi": "Tiếng Việt",
             "en": "Tiếng Anh",
             "fr": "Tiếng Pháp",
             "de": "Tiếng Đức",
             "es": "Tiếng Tây Ban Nha",
-            "zh-cn": "Tiếng Trung (Giản thể)",
-            "zh-tw": "Tiếng Trung (Phồn thể)",
+            "zh": "Tiếng Trung",
             "ja": "Tiếng Nhật",
             "ko": "Tiếng Hàn",
             "id": "Tiếng Indonesia",
             "th": "Tiếng Thái"
         }
         lang_name = lang_map.get(lang_code, f"Mã ngôn ngữ: {lang_code}")
-
-        st.info(f"🌐 **Ngôn ngữ phát hiện:** {lang_name}")
+        st.info(f"🌐 **Ngôn ngữ phát hiện:** {lang_name} (Độ tin cậy: {confidence:.2f})")
 
         # ==============================
         # 🔮 Phân tích cảm xúc
@@ -101,7 +100,7 @@ if st.button("🔍 Phân tích cảm xúc", use_container_width=True):
         logits = outputs.logits
         probs = F.softmax(logits, dim=-1)[0]
 
-        # Dự đoán
+        # Lấy nhãn dự đoán
         pred_id = torch.argmax(probs).item()
         pred_label = sentiment_map[pred_id]
         pred_score = probs[pred_id].item()
@@ -115,7 +114,7 @@ if st.button("🔍 Phân tích cảm xúc", use_container_width=True):
         st.progress(float(pred_score))
 
         # ==============================
-        # 📊 Biểu đồ tròn hiển thị xác suất
+        # 📊 Biểu đồ tròn thể hiện xác suất
         # ==============================
         df = pd.DataFrame({
             "Cảm xúc": [sentiment_map[i] for i in range(len(probs))],
