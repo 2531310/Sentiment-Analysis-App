@@ -83,7 +83,7 @@ if st.button("🔍 Phân tích cảm xúc", use_container_width=True):
             "th": "Tiếng Thái"
         }
         lang_name = lang_map.get(lang_code, f"Mã ngôn ngữ: {lang_code}")
-        st.info(f"🌐 **Ngôn ngữ phát hiện:** {lang_name} (Độ tin cậy: {confidence:.2f})")
+        st.info(f"🌐 **Ngôn ngữ phát hiện:** {lang_name}")
 
         # ==============================
         # 🔮 Phân tích cảm xúc
@@ -136,3 +136,4 @@ if st.button("🔍 Phân tích cảm xúc", use_container_width=True):
         )
         fig.update_layout(title_x=0.5, height=450)
         st.plotly_chart(fig, use_container_width=True)
+
